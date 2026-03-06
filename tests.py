@@ -4,9 +4,7 @@ from datetime import date, datetime, time, timedelta
 # Update import path to match your project structure:
 from solution import TimeWindow, BusyInterval, Slot, suggest_slots
 
-
 # ---------- Helpers ----------
-
 def combine(d: date, t: time) -> datetime:
     return datetime.combine(d, t)
 
@@ -179,3 +177,133 @@ def test_a5_buffer_eliminates_small_gaps():
 #################################################################################
 # Add your own additional tests here to cover more cases and edge cases as needed.
 #################################################################################
+
+def test_basic_single_slot():
+    day = date(2026, 3, 10)
+
+    working_hours = TimeWindow(
+        start=time(9,0),
+        end=time(17,0)
+    )
+
+    busy = [
+        BusyInterval(
+            start=time(9,0),
+            end=time(10,0)
+        )
+    ]
+
+    duration = timedelta(minutes=30)
+
+    slots = suggest_slots(day, working_hours, busy, duration, n=1)
+
+    assert len(slots) == 1
+    assert slots[0].start_time == time(10,0)
+
+
+def test_multiple_slots_chronological():
+    day = date(2026, 3, 10)
+
+    working_hours = TimeWindow(
+        start=time(9,0),
+        end=time(12,0)
+    )
+
+    busy = []
+
+    duration = timedelta(minutes=30)
+
+    slots = suggest_slots(day, working_hours, busy, duration, n=3)
+
+    assert len(slots) == 3
+    assert slots[0].start_time < slots[1].start_time < slots[2].start_time
+
+
+def test_respects_busy_intervals():
+    day = date(2026, 3, 10)
+
+    working_hours = TimeWindow(
+        start=time(9,0),
+        end=time(12,0)
+    )
+
+    busy = [
+        BusyInterval(
+            start=time(10,0),
+            end=time(11,0)
+        )
+    ]
+
+    duration = timedelta(minutes=30)
+
+    slots = suggest_slots(day, working_hours, busy, duration, n=3)
+
+    for slot in slots:
+        assert not (time(10,0) <= slot.start_time < time(11,0))
+
+
+# -------- EDGE CASE 1 --------
+def test_buffer_blocks_small_gap():
+    day = date(2026, 3, 10)
+
+    working_hours = TimeWindow(
+        start=time(9,0),
+        end=time(11,0)
+    )
+
+    busy = [
+        BusyInterval(
+            start=time(9,0),
+            end=time(9,45)
+        ),
+        BusyInterval(
+            start=time(10,0),
+            end=time(10,30)
+        )
+    ]
+
+    duration = timedelta(minutes=15)
+    buffer = timedelta(minutes=10)
+
+    slots = suggest_slots(day, working_hours, busy, duration, n=10, buffer=buffer)
+
+    # With 10-min buffer, small gaps are blocked but slots may still appear later in the window
+    # Ensure that none of the slots overlap busy intervals including buffer
+    for s in slots:
+        slot_start = datetime.combine(day, s.start_time)
+        slot_end = slot_start + duration
+        for b in busy:
+            b_start = datetime.combine(day, b.start) - buffer
+            b_end = datetime.combine(day, b.end) + buffer
+            assert not (slot_start < b_end and b_start < slot_end)
+
+
+# -------- EDGE CASE 2 --------
+def test_candidate_window_clipping():
+    day = date(2026, 3, 10)
+
+    working_hours = TimeWindow(
+        start=time(9,0),
+        end=time(17,0)
+    )
+
+    candidate_window = TimeWindow(
+        start=time(8,0),
+        end=time(10,0)
+    )
+
+    busy = []
+
+    duration = timedelta(minutes=30)
+
+    slots = suggest_slots(
+        day,
+        working_hours,
+        busy,
+        duration,
+        n=2,
+        candidate_window=candidate_window
+    )
+
+    # Should clip to working hours (start at 9)
+    assert slots[0].start_time >= time(9,0)
