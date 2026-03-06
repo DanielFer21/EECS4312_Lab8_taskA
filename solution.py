@@ -1,5 +1,5 @@
-## Student Name:
-## Student ID:
+## Student Name: Daniel Ferlisi
+## Student ID: 218714923
 
 """
 Task A: Appointment Timeslot Recommender (Stub)
@@ -88,7 +88,6 @@ class InfeasibleSchedule(Exception):
 
 
 # ---------------- Core Function ----------------
-
 def suggest_slots(
     day: date,
     working_hours: TimeWindow,
@@ -98,7 +97,7 @@ def suggest_slots(
     buffer: timedelta = timedelta(0),
     candidate_window: Optional[TimeWindow] = None
 ) -> List[Slot]:
-    """
+        """
     Suggest up to the next n valid appointment slots (start times) for the given day.
 
     Args:
@@ -124,5 +123,51 @@ def suggest_slots(
     ##################################################################
     # TODO: Implement as per lab handout requirements and constraints.
     ##################################################################
-    
-    raise NotImplementedError("suggest_slots has not been implemented yet")
+        if n <= 0:
+            return []
+
+        # Determine effective allowed window
+        start = working_hours.start
+        end = working_hours.end
+
+        if candidate_window is not None:
+            start = max(start, candidate_window.start)
+            end = min(end, candidate_window.end)
+
+        if start >= end:
+            return []
+
+        window_start = datetime.combine(day, start)
+        window_end = datetime.combine(day, end)
+
+        # Expand busy intervals with buffer
+        expanded_busy = []
+        for b in busy_intervals:
+            b_start = datetime.combine(day, b.start) - buffer
+            b_end = datetime.combine(day, b.end) + buffer
+            expanded_busy.append((b_start, b_end))
+
+        expanded_busy.sort()
+
+        step = timedelta(minutes=5)
+
+        results = []
+        current = window_start
+
+        while current + duration <= window_end and len(results) < n:
+
+            slot_start = current
+            slot_end = slot_start + duration
+
+            conflict = False
+            for b_start, b_end in expanded_busy:
+                if slot_start < b_end and b_start < slot_end:
+                    conflict = True
+                    break
+
+            if not conflict:
+                results.append(Slot(start_time=slot_start.time()))
+
+            current += step
+
+        return results
