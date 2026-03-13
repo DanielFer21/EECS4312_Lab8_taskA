@@ -179,3 +179,141 @@ def test_a5_buffer_eliminates_small_gaps():
 #################################################################################
 # Add your own additional tests here to cover more cases and edge cases as needed.
 #################################################################################
+# Covers C7, AC5, EC1
+def test_no_available_slots_raises_exception():
+    """
+    Edge case where busy intervals cover entire working window.
+    System should explicitly report no valid slots instead of failing silently.
+    """
+    day = date(2026, 2, 24)
+
+    working = TimeWindow(time(9, 0), time(11, 0))
+
+    busy = [
+        BusyInterval(time(9, 0), time(10, 0)),
+        BusyInterval(time(10, 0), time(11, 0)),
+    ]
+
+    duration = timedelta(minutes=30)
+
+    with pytest.raises(Exception):
+        suggest_slots(
+            day,
+            working,
+            busy,
+            duration,
+            n=5,
+            buffer=timedelta(0),
+            candidate_window=None
+        )
+
+
+# Covers C12, EC5, AC5
+def test_meeting_duration_longer_than_available_gap():
+    """
+    Meeting duration exceeds any available gap.
+    System must detect no valid slots.
+    """
+    day = date(2026, 2, 24)
+
+    working = TimeWindow(time(9, 0), time(10, 0))
+
+    busy = [
+        BusyInterval(time(9, 15), time(9, 30)),
+    ]
+
+    duration = timedelta(minutes=50)
+
+    with pytest.raises(Exception):
+        suggest_slots(
+            day,
+            working,
+            busy,
+            duration,
+            n=5,
+            buffer=timedelta(0),
+            candidate_window=None
+        )
+
+
+# Covers C10, AC1
+def test_slots_always_within_working_hours():
+    """
+    Verify suggested slots never fall outside working hours.
+    """
+    day = date(2026, 2, 24)
+
+    working = TimeWindow(time(9, 0), time(12, 0))
+    busy = []
+
+    duration = timedelta(minutes=30)
+
+    out = suggest_slots(
+        day,
+        working,
+        busy,
+        duration,
+        n=10,
+        buffer=timedelta(0),
+        candidate_window=None
+    )
+
+    for s in out:
+        assert working.start <= s.start_time < working.end
+
+
+# Covers C9, AC3, EC2
+def test_chronological_ordering_of_slots():
+    """
+    Slots must be returned in chronological order.
+    """
+    day = date(2026, 2, 24)
+
+    working = TimeWindow(time(9, 0), time(12, 0))
+
+    busy = [
+        BusyInterval(time(9, 45), time(10, 15))
+    ]
+
+    duration = timedelta(minutes=15)
+
+    out = suggest_slots(
+        day,
+        working,
+        busy,
+        duration,
+        n=10,
+        buffer=timedelta(0),
+        candidate_window=None
+    )
+
+    times = [s.start_time for s in out]
+
+    assert times == sorted(times)
+
+
+# Covers C8, AC6
+def test_invalid_busy_interval_rejected():
+    """
+    Busy interval where start >= end should raise error instead of silent failure.
+    """
+    day = date(2026, 2, 24)
+
+    working = TimeWindow(time(9, 0), time(12, 0))
+
+    busy = [
+        BusyInterval(time(10, 0), time(9, 0))  # invalid
+    ]
+
+    duration = timedelta(minutes=30)
+
+    with pytest.raises(ValueError):
+        suggest_slots(
+            day,
+            working,
+            busy,
+            duration,
+            n=5,
+            buffer=timedelta(0),
+            candidate_window=None
+        )
